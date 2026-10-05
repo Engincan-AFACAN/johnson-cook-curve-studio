@@ -1959,29 +1959,22 @@ function exportCSV() {
    PNG EXPORT
    ========================================================= */
 
-function exportPNG() {
+async function exportPNG() {
 
     try {
 
+        /*
+         * Make sure the selected graph background
+         * and axis appearance are applied.
+         */
         updateChartAppearance();
 
         chart.update("none");
 
-        const imageURL =
-            chart.toBase64Image(
-                "image/png",
-                1.0
-            );
 
-        if (
-            !imageURL ||
-            imageURL === "data:,"
-        ) {
-            throw new Error(
-                "PNG image could not be generated."
-            );
-        }
-
+        /* -----------------------------------------
+           FILE NAME
+           ----------------------------------------- */
 
         let materialName =
             activeImportedName ||
@@ -2004,23 +1997,203 @@ function exportPNG() {
                 );
 
 
-        const link =
-            document.createElement("a");
-
-
-        link.href =
-            imageURL;
-
-
-        link.download =
+        const fileName =
             `${materialName}_curve.png`;
 
 
-        document.body.appendChild(link);
+        /* -----------------------------------------
+           CHROME / EDGE:
+           OPEN REAL SAVE-AS WINDOW FIRST
+           ----------------------------------------- */
+
+        let fileHandle = null;
+
+
+        if (
+            "showSaveFilePicker" in window
+        ) {
+
+            try {
+
+                fileHandle =
+                    await window.showSaveFilePicker({
+
+                        suggestedName:
+                            fileName,
+
+                        types: [
+
+                            {
+                                description:
+                                    "PNG Image",
+
+                                accept: {
+
+                                    "image/png": [
+                                        ".png"
+                                    ]
+
+                                }
+
+                            }
+
+                        ]
+
+                    });
+
+            }
+
+            catch (error) {
+
+                /*
+                 * User pressed Cancel.
+                 * Do not report this as an application error.
+                 */
+                if (
+                    error.name ===
+                    "AbortError"
+                ) {
+
+                    return;
+
+                }
+
+
+                throw error;
+
+            }
+
+        }
+
+
+        /* -----------------------------------------
+           CONVERT CHART CANVAS TO PNG BLOB
+           ----------------------------------------- */
+
+        const blob =
+            await new Promise(
+                (
+                    resolve,
+                    reject
+                ) => {
+
+                    chart.canvas.toBlob(
+
+                        result => {
+
+                            if (
+                                result
+                            ) {
+
+                                resolve(
+                                    result
+                                );
+
+                            }
+
+                            else {
+
+                                reject(
+                                    new Error(
+                                        "Canvas could not be converted to PNG."
+                                    )
+                                );
+
+                            }
+
+                        },
+
+                        "image/png",
+
+                        1.0
+
+                    );
+
+                }
+            );
+
+
+        /* -----------------------------------------
+           SAVE WITH FILE SYSTEM ACCESS API
+           ----------------------------------------- */
+
+        if (
+            fileHandle
+        ) {
+
+            const writable =
+                await fileHandle.createWritable();
+
+
+            await writable.write(
+                blob
+            );
+
+
+            await writable.close();
+
+
+            console.log(
+                "PNG saved:",
+                fileName
+            );
+
+
+            return;
+
+        }
+
+
+        /* -----------------------------------------
+           FALLBACK FOR OTHER BROWSERS
+           ----------------------------------------- */
+
+        const url =
+            URL.createObjectURL(
+                blob
+            );
+
+
+        const link =
+            document.createElement(
+                "a"
+            );
+
+
+        link.href =
+            url;
+
+
+        link.download =
+            fileName;
+
+
+        link.style.display =
+            "none";
+
+
+        document.body.appendChild(
+            link
+        );
+
 
         link.click();
 
-        document.body.removeChild(link);
+
+        setTimeout(
+            () => {
+
+                URL.revokeObjectURL(
+                    url
+                );
+
+                link.remove();
+
+            },
+
+            1000
+
+        );
 
     }
 
@@ -2031,8 +2204,9 @@ function exportPNG() {
             error
         );
 
+
         alert(
-            "PNG export failed: " +
+            "PNG export failed:\n\n" +
             error.message
         );
 
