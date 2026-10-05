@@ -1961,40 +1961,84 @@ function exportCSV() {
 
 function exportPNG() {
 
-    updateChartAppearance();
+    try {
+
+        updateChartAppearance();
+
+        chart.update("none");
+
+        const imageURL =
+            chart.toBase64Image(
+                "image/png",
+                1.0
+            );
+
+        if (
+            !imageURL ||
+            imageURL === "data:,"
+        ) {
+            throw new Error(
+                "PNG image could not be generated."
+            );
+        }
 
 
-    requestAnimationFrame(
-        () => {
+        let materialName =
+            activeImportedName ||
+            (
+                preset.value !== "custom"
+                    ? PRESETS[preset.value].name
+                    : "Johnson_Cook"
+            );
 
-            const link =
 
-                document.createElement(
-                    "a"
+        materialName =
+            materialName
+                .replace(
+                    /[^a-zA-Z0-9_-]+/g,
+                    "_"
+                )
+                .replace(
+                    /^_+|_+$/g,
+                    ""
                 );
 
 
-            link.href =
-
-                chart.canvas
-                    .toDataURL(
-                        "image/png",
-                        1
-                    );
+        const link =
+            document.createElement("a");
 
 
-            link.download =
+        link.href =
+            imageURL;
 
-                "johnson_cook_curve.png";
+
+        link.download =
+            `${materialName}_curve.png`;
 
 
-            link.click();
+        document.body.appendChild(link);
 
-        }
-    );
+        link.click();
+
+        document.body.removeChild(link);
+
+    }
+
+    catch (error) {
+
+        console.error(
+            "PNG export error:",
+            error
+        );
+
+        alert(
+            "PNG export failed: " +
+            error.message
+        );
+
+    }
 
 }
-
 
 /* =========================================================
    LS-DYNA NUMBER PARSER
