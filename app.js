@@ -1834,7 +1834,7 @@ function updateChartAppearance() {
 
             :
 
-            "rgba(31,41,55,.13)";
+            "rgba(0,0,0,0.35)";
 
     }
 
