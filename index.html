@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <title>Johnson-Cook Curve Studio</title>
+
+  <meta
+    name="description"
+    content="Interactive Johnson-Cook material model curve generator for engineering applications."
+  />
+
+  <link rel="stylesheet" href="style.css" />
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+
+  <header class="app-header">
+    <div class="header-content">
+      <div>
+        <h1>Johnson-Cook Curve Studio</h1>
+        <p>
+          Interactive material model curve generator for
+          Modified and Simplified Johnson-Cook formulations.
+        </p>
+      </div>
+    </div>
+  </header>
+
+  <main class="app-container">
+
+    <!-- ===================================================== -->
+    <!-- CONTROL PANEL -->
+    <!-- ===================================================== -->
+
+    <section class="panel control-panel">
+
+      <h2>Material Model</h2>
+
+      <div class="form-grid">
+
+        <div class="form-group">
+          <label for="modelType">Model Type</label>
+
+          <select id="modelType">
+            <option value="modified">
+              Modified Johnson-Cook
+            </option>
+
+            <option value="simplified">
+              Simplified Johnson-Cook
+            </option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label for="preset">Material Preset</label>
+
+          <select id="preset">
+            <option value="custom">Custom</option>
+            <option value="weldox700">
+              Weldox 700E
+            </option>
+            <option value="hardox400">
+              Hardox 400
+            </option>
+            <option value="apm2">
+              APM2 Hardened Steel Core
+            </option>
+          </select>
+        </div>
+
+      </div>
+
+
+      <!-- =================================================== -->
+      <!-- JOHNSON COOK PARAMETERS -->
+      <!-- =================================================== -->
+
+      <h3>Johnson-Cook Parameters</h3>
+
+      <div class="parameter-grid">
+
+        <div class="form-group">
+          <label for="A">A [GPa]</label>
+          <input id="A" type="number" step="any" value="0.819" />
+        </div>
+
+        <div class="form-group">
+          <label for="B">B [GPa]</label>
+          <input id="B" type="number" step="any" value="0.308" />
+        </div>
+
+        <div class="form-group">
+          <label for="n">n</label>
+          <input id="n" type="number" step="any" value="0.64" />
+        </div>
+
+        <div class="form-group">
+          <label for="C">C</label>
+          <input id="C" type="number" step="any" value="0.0098" />
+        </div>
+
+        <div
+          class="form-group modified-only"
+          id="mContainer"
+        >
+          <label for="m">m</label>
+          <input id="m" type="number" step="any" value="1.0" />
+        </div>
+
+      </div>
+
+
+      <!-- =================================================== -->
+      <!-- REFERENCE CONDITIONS -->
+      <!-- =================================================== -->
+
+      <h3>Reference Conditions</h3>
+
+      <div class="parameter-grid">
+
+        <div class="form-group">
+          <label for="referenceStrainRate">
+            Reference Strain Rate ε̇₀ [s⁻¹]
+          </label>
+
+          <input
+            id="referenceStrainRate"
+            type="number"
+            step="any"
+            value="0.0005"
+          />
+        </div>
+
+        <div
+          class="form-group modified-only"
+          id="referenceTemperatureContainer"
+        >
+          <label for="referenceTemperature">
+            Reference Temperature Tr [K]
+          </label>
+
+          <input
+            id="referenceTemperature"
+            type="number"
+            step="any"
+            value="293"
+          />
+        </div>
+
+        <div
+          class="form-group modified-only"
+          id="meltingTemperatureContainer"
+        >
+          <label for="meltingTemperature">
+            Melting Temperature Tm [K]
+          </label>
+
+          <input
+            id="meltingTemperature"
+            type="number"
+            step="any"
+            value="1800"
+          />
+        </div>
+
+      </div>
+
+
+      <!-- =================================================== -->
+      <!-- ANALYSIS CONDITIONS -->
+      <!-- =================================================== -->
+
+      <h3>Analysis Conditions</h3>
+
+      <div class="parameter-grid">
+
+        <div class="form-group">
+          <label for="strainRate">
+            Strain Rate ε̇ [s⁻¹]
+          </label>
+
+          <input
+            id="strainRate"
+            type="number"
+            step="any"
+            value="0.0005"
+          />
+        </div>
+
+        <div
+          class="form-group modified-only"
+          id="temperatureContainer"
+        >
+          <label for="temperature">
+            Temperature [K]
+          </label>
+
+          <input
+            id="temperature"
+            type="number"
+            step="any"
+            value="293"
+          />
+        </div>
+
+        <div class="form-group">
+          <label for="maxPlasticStrain">
+            Maximum Plastic Strain
+          </label>
+
+          <input
+            id="maxPlasticStrain"
+            type="number"
+            step="any"
+            value="1.5"
+          />
+        </div>
+
+      </div>
+
+
+      <!-- =================================================== -->
+      <!-- BUTTONS -->
+      <!-- =================================================== -->
+
+      <div class="button-row">
+
+        <button
+          id="updateButton"
+          class="primary-button"
+        >
+          Update Curve
+        </button>
+
+        <button
+          id="addCurveButton"
+          class="secondary-button"
+        >
+          Add Curve
+        </button>
+
+        <button
+          id="clearCurvesButton"
+          class="secondary-button"
+        >
+          Clear Curves
+        </button>
+
+        <button
+          id="exportCsvButton"
+          class="secondary-button"
+        >
+          Export CSV
+        </button>
+
+      </div>
+
+    </section>
+
+
+    <!-- ===================================================== -->
+    <!-- EQUATION PANEL -->
+    <!-- ===================================================== -->
+
+    <section class="panel">
+
+      <h2>Constitutive Equation</h2>
+
+      <div id="equationBox" class="equation-box">
+
+        σy =
+        [A + B(εp)n]
+        [1 + C ln(ε̇ / ε̇0)]
+        [1 − (T*)m]
+
+      </div>
+
+      <div class="equation-description">
+
+        <p>
+          <strong>A</strong>:
+          initial yield stress
+        </p>
+
+        <p>
+          <strong>B</strong>:
+          strain hardening coefficient
+        </p>
+
+        <p>
+          <strong>n</strong>:
+          strain hardening exponent
+        </p>
+
+        <p>
+          <strong>C</strong>:
+          strain-rate sensitivity coefficient
+        </p>
+
+        <p class="modified-only">
+          <strong>m</strong>:
+          thermal softening exponent
+        </p>
+
+      </div>
+
+    </section>
+
+
+    <!-- ===================================================== -->
+    <!-- GRAPH PANEL -->
+    <!-- ===================================================== -->
+
+    <section class="panel graph-panel">
+
+      <div class="graph-header">
+
+        <div>
+          <h2>Flow Stress Curve</h2>
+
+          <p>
+            Flow stress versus equivalent plastic strain
+          </p>
+        </div>
+
+      </div>
+
+      <div class="chart-container">
+
+        <canvas id="jcChart"></canvas>
+
+      </div>
+
+    </section>
+
+
+    <!-- ===================================================== -->
+    <!-- CURRENT RESULTS -->
+    <!-- ===================================================== -->
+
+    <section class="panel">
+
+      <h2>Current Results</h2>
+
+      <div class="result-grid">
+
+        <div class="result-card">
+
+          <span class="result-label">
+            Flow Stress at εp = 0
+          </span>
+
+          <strong id="stressAtZero">
+            -
+          </strong>
+
+        </div>
+
+
+        <div class="result-card">
+
+          <span class="result-label">
+            Flow Stress at εp = 0.10
+          </span>
+
+          <strong id="stressAt01">
+            -
+          </strong>
+
+        </div>
+
+
+        <div class="result-card">
+
+          <span class="result-label">
+            Strain Rate Multiplier
+          </span>
+
+          <strong id="strainRateMultiplier">
+            -
+          </strong>
+
+        </div>
+
+
+        <div class="result-card">
+
+          <span class="result-label">
+            Thermal Multiplier
+          </span>
+
+          <strong id="thermalMultiplier">
+            -
+          </strong>
+
+        </div>
+
+      </div>
+
+    </section>
+
+
+    <!-- ===================================================== -->
+    <!-- INFORMATION -->
+    <!-- ===================================================== -->
+
+    <section class="panel information-panel">
+
+      <h2>Notes</h2>
+
+      <p>
+        The generated curves represent the mathematical response
+        of the selected Johnson-Cook material model.
+      </p>
+
+      <p>
+        They should not be interpreted as experimental
+        stress-strain data unless the material parameters have
+        been calibrated against experimental test results.
+      </p>
+
+      <p>
+        Strain-rate and temperature effects depend directly on
+        the constitutive parameters and reference conditions
+        entered by the user.
+      </p>
+
+    </section>
+
+  </main>
+
+
+  <footer class="app-footer">
+
+    <p>
+      Johnson-Cook Curve Studio
+    </p>
+
+    <p>
+      Engineering material model visualization tool
+    </p>
+
+  </footer>
+
+
+  <script src="app.js"></script>
+
+</body>
+</html>
