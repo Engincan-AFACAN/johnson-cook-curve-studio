@@ -1,1483 +1,933 @@
-/* =========================================================
-   JOHNSON-COOK CURVE STUDIO
-   ========================================================= */
+:root {
 
-"use strict";
+    --page-bg: #0b1016;
 
+    --panel-bg: #111923;
 
-/* =========================================================
-   MATERIAL PRESETS
-   Units used in the application:
-   Stress       -> GPa
-   Strain rate  -> s^-1
-   Temperature  -> K
-   ========================================================= */
+    --panel-secondary: #17212d;
 
-const materialPresets = {
+    --text: #eef3f8;
 
-    weldox700: {
-        name: "Weldox 700E",
-        model: "modified",
+    --muted: #94a3b5;
 
-        A: 0.819,
-        B: 0.308,
-        n: 0.64,
-        C: 0.0098,
-        m: 1.0,
+    --border: #293747;
 
-        referenceStrainRate: 5.0e-4,
+    --accent: #4aa3ff;
 
-        referenceTemperature: 293.0,
-        meltingTemperature: 1800.0,
+    --accent-hover: #268ced;
 
-        strainRate: 5.0e-4,
-        temperature: 293.0,
+    --success: #5ccc8a;
 
-        maxPlasticStrain: 1.5
-    },
+    --warning: #f1c75b;
 
-    hardox400: {
-        name: "Hardox 400",
-        model: "modified",
+    --danger: #ff6969;
 
-        A: 1.350,
-        B: 0.362,
-        n: 1.0,
-        C: 0.0108,
-        m: 1.0,
-
-        referenceStrainRate: 5.0e-4,
-
-        referenceTemperature: 293.0,
-        meltingTemperature: 1800.0,
-
-        strainRate: 5.0e-4,
-        temperature: 293.0,
-
-        maxPlasticStrain: 1.5
-    },
-
-    apm2: {
-        name: "APM2 Hardened Steel Core",
-        model: "simplified",
-
-        A: 1.20,
-        B: 50.0,
-        n: 1.0,
-        C: 0.0,
-
-        /*
-        EPS0 = 1.0 / ms in the LS-DYNA material card.
-
-        1 / ms = 1000 / s
-        */
-
-        referenceStrainRate: 1000.0,
-
-        strainRate: 1000.0,
-
-        maxPlasticStrain: 0.15
-    }
-
-};
-
-
-/* =========================================================
-   DOM ELEMENTS
-   ========================================================= */
-
-const modelType =
-    document.getElementById("modelType");
-
-const preset =
-    document.getElementById("preset");
-
-
-const inputA =
-    document.getElementById("A");
-
-const inputB =
-    document.getElementById("B");
-
-const inputN =
-    document.getElementById("n");
-
-const inputC =
-    document.getElementById("C");
-
-const inputM =
-    document.getElementById("m");
-
-
-const referenceStrainRate =
-    document.getElementById("referenceStrainRate");
-
-const referenceTemperature =
-    document.getElementById("referenceTemperature");
-
-const meltingTemperature =
-    document.getElementById("meltingTemperature");
-
-
-const strainRate =
-    document.getElementById("strainRate");
-
-const temperature =
-    document.getElementById("temperature");
-
-const maxPlasticStrain =
-    document.getElementById("maxPlasticStrain");
-
-
-const updateButton =
-    document.getElementById("updateButton");
-
-const addCurveButton =
-    document.getElementById("addCurveButton");
-
-const clearCurvesButton =
-    document.getElementById("clearCurvesButton");
-
-const exportCsvButton =
-    document.getElementById("exportCsvButton");
-
-
-const equationBox =
-    document.getElementById("equationBox");
-
-
-const stressAtZero =
-    document.getElementById("stressAtZero");
-
-const stressAt01 =
-    document.getElementById("stressAt01");
-
-const strainRateMultiplierDisplay =
-    document.getElementById("strainRateMultiplier");
-
-const thermalMultiplierDisplay =
-    document.getElementById("thermalMultiplier");
-
-
-/* =========================================================
-   CHART COLORS
-   ========================================================= */
-
-const curveColors = [
-
-    "#4aa3ff",
-    "#ff785a",
-    "#65d38e",
-    "#d695ff",
-    "#f4c95d",
-    "#58d3d8",
-    "#ff70ad"
-
-];
-
-let colorIndex = 1;
-
-
-/* =========================================================
-   CHART INITIALIZATION
-   ========================================================= */
-
-const chartContext =
-    document
-        .getElementById("jcChart")
-        .getContext("2d");
-
-
-const jcChart =
-    new Chart(
-        chartContext,
-        {
-
-            type: "line",
-
-            data: {
-
-                datasets: []
-
-            },
-
-            options: {
-
-                responsive: true,
-
-                maintainAspectRatio: false,
-
-                animation: false,
-
-                interaction: {
-
-                    mode: "nearest",
-
-                    intersect: false
-
-                },
-
-                parsing: false,
-
-                normalized: true,
-
-                plugins: {
-
-                    legend: {
-
-                        display: true,
-
-                        labels: {
-
-                            color: "#d7e3ef",
-
-                            usePointStyle: true,
-
-                            boxWidth: 10
-
-                        }
-
-                    },
-
-                    tooltip: {
-
-                        callbacks: {
-
-                            title: function (items) {
-
-                                if (!items.length) {
-                                    return "";
-                                }
-
-                                return (
-                                    "Equivalent Plastic Strain: " +
-                                    items[0].parsed.x.toFixed(5)
-                                );
-
-                            },
-
-                            label: function (context) {
-
-                                return (
-                                    context.dataset.label +
-                                    ": " +
-                                    context.parsed.y.toFixed(5) +
-                                    " GPa"
-                                );
-
-                            }
-
-                        }
-
-                    }
-
-                },
-
-                scales: {
-
-                    x: {
-
-                        type: "linear",
-
-                        title: {
-
-                            display: true,
-
-                            text:
-                                "Equivalent Plastic Strain, εp",
-
-                            color:
-                                "#d7e3ef"
-
-                        },
-
-                        ticks: {
-
-                            color:
-                                "#9aa8b7"
-
-                        },
-
-                        grid: {
-
-                            color:
-                                "rgba(154,168,183,0.12)"
-
-                        }
-
-                    },
-
-                    y: {
-
-                        beginAtZero: true,
-
-                        title: {
-
-                            display: true,
-
-                            text:
-                                "Flow Stress, σy [GPa]",
-
-                            color:
-                                "#d7e3ef"
-
-                        },
-
-                        ticks: {
-
-                            color:
-                                "#9aa8b7"
-
-                        },
-
-                        grid: {
-
-                            color:
-                                "rgba(154,168,183,0.12)"
-
-                        }
-
-                    }
-
-                }
-
-            }
-
-        }
-
-    );
-
-
-/* =========================================================
-   INPUT READER
-   ========================================================= */
-
-function readNumber(element, name) {
-
-    const value =
-        Number(element.value);
-
-    if (!Number.isFinite(value)) {
-
-        throw new Error(
-            `${name} must be a valid number.`
-        );
-
-    }
-
-    return value;
+    --radius: 14px;
 
 }
 
 
-function getCurrentParameters() {
+body.light-theme {
 
-    const parameters = {
+    --page-bg: #f3f6f9;
 
-        model:
-            modelType.value,
+    --panel-bg: #ffffff;
 
-        A:
-            readNumber(inputA, "A"),
+    --panel-secondary: #f4f7fa;
 
-        B:
-            readNumber(inputB, "B"),
+    --text: #18212b;
 
-        n:
-            readNumber(inputN, "n"),
+    --muted: #637083;
 
-        C:
-            readNumber(inputC, "C"),
+    --border: #d3dbe5;
 
-        referenceStrainRate:
-            readNumber(
-                referenceStrainRate,
-                "Reference strain rate"
-            ),
+    --accent: #1565c0;
 
-        strainRate:
-            readNumber(
-                strainRate,
-                "Strain rate"
-            ),
+    --accent-hover: #0d4fa0;
 
-        maxPlasticStrain:
-            readNumber(
-                maxPlasticStrain,
-                "Maximum plastic strain"
-            )
-
-    };
+}
 
 
-    if (
-        parameters.referenceStrainRate <= 0
-    ) {
+* {
 
-        throw new Error(
-            "Reference strain rate must be greater than zero."
-        );
+    box-sizing: border-box;
 
-    }
+}
 
 
-    if (
-        parameters.strainRate <= 0
-    ) {
+html {
 
-        throw new Error(
-            "Strain rate must be greater than zero."
-        );
+    scroll-behavior: smooth;
 
-    }
+}
 
 
-    if (
-        parameters.maxPlasticStrain <= 0
-    ) {
+body {
 
-        throw new Error(
-            "Maximum plastic strain must be greater than zero."
-        );
+    margin: 0;
 
-    }
+    font-family:
+        Inter,
+        system-ui,
+        -apple-system,
+        BlinkMacSystemFont,
+        "Segoe UI",
+        sans-serif;
 
+    color: var(--text);
 
-    if (parameters.n < 0) {
+    background: var(--page-bg);
 
-        throw new Error(
-            "Strain hardening exponent n cannot be negative."
-        );
-
-    }
-
-
-    if (
-        parameters.model === "modified"
-    ) {
-
-        parameters.m =
-            readNumber(
-                inputM,
-                "m"
-            );
-
-        parameters.referenceTemperature =
-            readNumber(
-                referenceTemperature,
-                "Reference temperature"
-            );
-
-        parameters.meltingTemperature =
-            readNumber(
-                meltingTemperature,
-                "Melting temperature"
-            );
-
-        parameters.temperature =
-            readNumber(
-                temperature,
-                "Temperature"
-            );
-
-
-        if (
-            parameters.meltingTemperature <=
-            parameters.referenceTemperature
-        ) {
-
-            throw new Error(
-                "Melting temperature must be greater than reference temperature."
-            );
-
-        }
-
-
-        if (parameters.m < 0) {
-
-            throw new Error(
-                "Thermal softening exponent m cannot be negative."
-            );
-
-        }
-
-    }
-
-
-    return parameters;
+    line-height: 1.5;
 
 }
 
 
 /* =========================================================
-   JOHNSON-COOK MODEL COMPONENTS
+   HEADER
    ========================================================= */
 
+.app-header {
 
-/*
-Strain hardening:
+    border-bottom:
+        1px solid
+        var(--border);
 
-A + B * eps_p^n
-*/
-
-function calculateHardening(
-    plasticStrain,
-    parameters
-) {
-
-    return (
-
-        parameters.A +
-
-        parameters.B *
-
-        Math.pow(
-            plasticStrain,
-            parameters.n
-        )
-
-    );
+    background:
+        var(--panel-bg);
 
 }
 
 
-/*
-Strain-rate multiplier:
+.header-inner {
 
-1 + C ln(epsDot / epsDot0)
-*/
+    max-width: 1400px;
 
-function calculateStrainRateMultiplier(
-    parameters
-) {
+    margin: 0 auto;
 
-    const ratio =
+    padding: 26px 24px;
 
-        parameters.strainRate /
+    display: flex;
 
-        parameters.referenceStrainRate;
+    align-items: center;
 
+    justify-content: space-between;
 
-    return (
-
-        1 +
-
-        parameters.C *
-
-        Math.log(ratio)
-
-    );
+    gap: 30px;
 
 }
 
 
-/*
-Normalized homologous temperature:
+.app-header h1 {
 
-T* = (T - Tr) / (Tm - Tr)
+    margin: 0 0 5px;
 
-T* is limited to the interval [0, 1].
-*/
-
-function calculateNormalizedTemperature(
-    parameters
-) {
-
-    let normalizedTemperature =
-
-        (
-            parameters.temperature -
-
-            parameters.referenceTemperature
-        )
-
-        /
-
-        (
-            parameters.meltingTemperature -
-
-            parameters.referenceTemperature
+    font-size:
+        clamp(
+            1.7rem,
+            3vw,
+            2.5rem
         );
-
-
-    normalizedTemperature =
-
-        Math.max(
-            0,
-            Math.min(
-                1,
-                normalizedTemperature
-            )
-        );
-
-
-    return normalizedTemperature;
 
 }
 
 
-/*
-Thermal softening multiplier:
+.app-header p {
 
-1 - (T*)^m
-*/
+    margin: 0;
 
-function calculateThermalMultiplier(
-    parameters
-) {
+    color: var(--muted);
 
-    if (
-        parameters.model ===
-        "simplified"
-    ) {
-
-        return 1.0;
-
-    }
+}
 
 
-    const normalizedTemperature =
+.header-controls {
 
-        calculateNormalizedTemperature(
-            parameters
-        );
-
-
-    return (
-
-        1 -
-
-        Math.pow(
-            normalizedTemperature,
-            parameters.m
-        )
-
-    );
+    min-width: 160px;
 
 }
 
 
 /* =========================================================
-   FLOW STRESS
+   LAYOUT
    ========================================================= */
 
-function calculateFlowStress(
-    plasticStrain,
-    parameters
-) {
+.app-container {
 
-    const hardening =
-        calculateHardening(
-            plasticStrain,
-            parameters
-        );
+    max-width: 1400px;
 
+    margin: 0 auto;
 
-    const strainRateMultiplier =
-        calculateStrainRateMultiplier(
-            parameters
-        );
+    padding:
+        26px
+        24px
+        50px;
 
+    display: grid;
 
-    const thermalMultiplier =
-        calculateThermalMultiplier(
-            parameters
-        );
-
-
-    let flowStress =
-
-        hardening *
-
-        strainRateMultiplier *
-
-        thermalMultiplier;
-
-
-    /*
-    Negative flow stress is not physically meaningful
-    in the present visualization.
-    */
-
-    flowStress =
-        Math.max(
-            0,
-            flowStress
-        );
-
-
-    return flowStress;
+    gap: 22px;
 
 }
 
 
 /* =========================================================
-   GENERATE CURVE
+   PANEL
    ========================================================= */
 
-function generateCurve(
-    parameters
-) {
+.panel {
 
-    const numberOfPoints =
-        400;
+    background:
+        var(--panel-bg);
 
+    border:
+        1px solid
+        var(--border);
 
-    const curve = [];
+    border-radius:
+        var(--radius);
 
+    padding:
+        24px;
 
-    for (
-        let i = 0;
-        i <= numberOfPoints;
-        i++
-    ) {
-
-        const plasticStrain =
-
-            (
-                parameters.maxPlasticStrain *
-
-                i
-
-            )
-
-            /
-
-            numberOfPoints;
+}
 
 
-        const flowStress =
+.panel h2 {
 
-            calculateFlowStress(
-                plasticStrain,
-                parameters
-            );
+    margin:
+        0
+        0
+        18px;
 
-
-        curve.push({
-
-            x:
-                plasticStrain,
-
-            y:
-                flowStress
-
-        });
-
-    }
+}
 
 
-    return curve;
+.panel h3 {
+
+    margin:
+        28px
+        0
+        14px;
+
+    font-size:
+        1rem;
+
+}
+
+
+.section-heading {
+
+    display: flex;
+
+    align-items: flex-start;
+
+    justify-content: space-between;
+
+    gap: 20px;
+
+    margin-bottom: 18px;
+
+}
+
+
+.section-heading h2 {
+
+    margin-bottom: 3px;
+
+}
+
+
+.section-heading p {
+
+    margin: 0;
+
+    color: var(--muted);
+
+}
+
+
+.version-badge {
+
+    background:
+        var(--panel-secondary);
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius:
+        999px;
+
+    padding:
+        5px 10px;
+
+    color:
+        var(--muted);
+
+    font-size:
+        0.8rem;
 
 }
 
 
 /* =========================================================
-   CURVE LABEL
+   FORMS
    ========================================================= */
 
-function getCurveName(
-    parameters
-) {
+.form-grid,
+.parameter-grid {
 
-    let materialName =
-        "Custom Material";
+    display: grid;
 
+    gap: 15px;
 
-    if (
-        preset.value !== "custom" &&
-        materialPresets[preset.value]
-    ) {
-
-        materialName =
-            materialPresets[preset.value].name;
-
-    }
+}
 
 
-    let label =
+.two-columns {
 
-        `${materialName} | ` +
+    grid-template-columns:
+        repeat(
+            2,
+            minmax(0, 1fr)
+        );
 
-        `ε̇ = ` +
-
-        `${formatScientific(parameters.strainRate)} s⁻¹`;
-
-
-    if (
-        parameters.model === "modified"
-    ) {
-
-        label +=
-
-            ` | T = ${parameters.temperature} K`;
-
-    }
+}
 
 
-    return label;
+.three-columns {
+
+    grid-template-columns:
+        repeat(
+            3,
+            minmax(0, 1fr)
+        );
+
+}
+
+
+.parameter-grid {
+
+    grid-template-columns:
+        repeat(
+            5,
+            minmax(0, 1fr)
+        );
+
+}
+
+
+.form-group {
+
+    min-width: 0;
+
+    display: flex;
+
+    flex-direction: column;
+
+    gap: 6px;
+
+}
+
+
+label {
+
+    color:
+        var(--muted);
+
+    font-size:
+        0.85rem;
+
+}
+
+
+input,
+select {
+
+    width: 100%;
+
+    min-height:
+        44px;
+
+    padding:
+        9px
+        11px;
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius:
+        8px;
+
+    background:
+        var(--panel-secondary);
+
+    color:
+        var(--text);
+
+    font:
+        inherit;
+
+    outline:
+        none;
+
+}
+
+
+input:focus,
+select:focus {
+
+    border-color:
+        var(--accent);
+
+    box-shadow:
+        0 0 0 3px
+        color-mix(
+            in srgb,
+            var(--accent) 20%,
+            transparent
+        );
 
 }
 
 
 /* =========================================================
-   CURRENT CURVE
+   DROP ZONE
    ========================================================= */
 
-function updateCurrentCurve() {
+.drop-zone {
 
-    try {
+    border:
+        2px dashed
+        var(--border);
 
-        const parameters =
-            getCurrentParameters();
+    border-radius:
+        12px;
+
+    padding:
+        28px;
+
+    display:
+        flex;
+
+    flex-direction:
+        column;
+
+    align-items:
+        center;
+
+    justify-content:
+        center;
+
+    gap:
+        9px;
+
+    text-align:
+        center;
+
+    background:
+        var(--panel-secondary);
+
+    cursor:
+        pointer;
+
+    transition:
+        border-color .2s ease,
+        transform .15s ease;
+
+}
 
 
-        const curve =
-            generateCurve(parameters);
+.drop-zone:hover,
+.drop-zone.drag-over {
+
+    border-color:
+        var(--accent);
+
+}
 
 
-        const dataset = {
+.drop-zone.drag-over {
 
-            label:
-                getCurveName(parameters),
+    transform:
+        scale(1.005);
 
-            data:
-                curve,
+}
 
-            borderColor:
-                curveColors[0],
 
-            backgroundColor:
-                curveColors[0],
+.drop-zone span {
 
-            borderWidth:
+    color:
+        var(--muted);
+
+    font-size:
+        .85rem;
+
+}
+
+
+.import-options {
+
+    margin-top:
+        18px;
+
+}
+
+
+/* =========================================================
+   STATUS
+   ========================================================= */
+
+.status-box {
+
+    margin-top:
+        15px;
+
+    padding:
+        10px
+        12px;
+
+    border-left:
+        4px solid
+        var(--accent);
+
+    border-radius:
+        7px;
+
+    background:
+        var(--panel-secondary);
+
+    color:
+        var(--muted);
+
+    font-size:
+        .85rem;
+
+}
+
+
+.status-box.success {
+
+    border-left-color:
+        var(--success);
+
+}
+
+
+.status-box.warning {
+
+    border-left-color:
+        var(--warning);
+
+}
+
+
+.status-box.error {
+
+    border-left-color:
+        var(--danger);
+
+}
+
+
+/* =========================================================
+   BUTTONS
+   ========================================================= */
+
+.button-row {
+
+    display:
+        flex;
+
+    flex-wrap:
+        wrap;
+
+    gap:
+        10px;
+
+    margin-top:
+        26px;
+
+}
+
+
+button {
+
+    min-height:
+        44px;
+
+    padding:
+        10px
+        15px;
+
+    border-radius:
+        8px;
+
+    border:
+        1px solid
+        var(--border);
+
+    cursor:
+        pointer;
+
+    font:
+        inherit;
+
+    font-weight:
+        600;
+
+}
+
+
+.primary-button {
+
+    background:
+        var(--accent);
+
+    border-color:
+        var(--accent);
+
+    color:
+        white;
+
+}
+
+
+.primary-button:hover {
+
+    background:
+        var(--accent-hover);
+
+}
+
+
+.secondary-button {
+
+    color:
+        var(--text);
+
+    background:
+        var(--panel-secondary);
+
+}
+
+
+.secondary-button:hover {
+
+    border-color:
+        var(--accent);
+
+}
+
+
+/* =========================================================
+   EQUATION
+   ========================================================= */
+
+.equation-box {
+
+    padding:
+        22px;
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius:
+        11px;
+
+    background:
+        var(--panel-secondary);
+
+    text-align:
+        center;
+
+    overflow-wrap:
+        anywhere;
+
+    font-family:
+        "Cambria Math",
+        "Times New Roman",
+        serif;
+
+    font-size:
+        clamp(
+            1.05rem,
+            2vw,
+            1.45rem
+        );
+
+}
+
+
+/* =========================================================
+   CHART
+   ========================================================= */
+
+.chart-container {
+
+    position:
+        relative;
+
+    width:
+        100%;
+
+    height:
+        500px;
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius:
+        10px;
+
+    overflow:
+        hidden;
+
+}
+
+
+.graph-panel {
+
+    min-width: 0;
+
+}
+
+
+/* =========================================================
+   RESULTS
+   ========================================================= */
+
+.result-grid {
+
+    display:
+        grid;
+
+    grid-template-columns:
+        repeat(
+            4,
+            minmax(0, 1fr)
+        );
+
+    gap:
+        14px;
+
+}
+
+
+.result-card {
+
+    padding:
+        16px;
+
+    background:
+        var(--panel-secondary);
+
+    border:
+        1px solid
+        var(--border);
+
+    border-radius:
+        9px;
+
+}
+
+
+.result-card span {
+
+    display:
+        block;
+
+    margin-bottom:
+        7px;
+
+    color:
+        var(--muted);
+
+    font-size:
+        .8rem;
+
+}
+
+
+.result-card strong {
+
+    font-size:
+        1.1rem;
+
+}
+
+
+/* =========================================================
+   NOTES
+   ========================================================= */
+
+.notes p {
+
+    margin:
+        7px 0;
+
+    color:
+        var(--muted);
+
+}
+
+
+/* =========================================================
+   FOOTER
+   ========================================================= */
+
+.app-footer {
+
+    padding:
+        24px;
+
+    text-align:
+        center;
+
+    color:
+        var(--muted);
+
+    border-top:
+        1px solid
+        var(--border);
+
+    background:
+        var(--panel-bg);
+
+    font-size:
+        .85rem;
+
+}
+
+
+/* =========================================================
+   UTILITIES
+   ========================================================= */
+
+.hidden {
+
+    display:
+        none !important;
+
+}
+
+
+/* =========================================================
+   RESPONSIVE
+   ========================================================= */
+
+@media
+(max-width: 1100px) {
+
+    .parameter-grid {
+
+        grid-template-columns:
+            repeat(
                 3,
-
-            pointRadius:
-                0,
-
-            pointHoverRadius:
-                4,
-
-            tension:
-                0
-
-        };
-
-
-        if (
-            jcChart.data.datasets.length === 0
-        ) {
-
-            jcChart.data.datasets.push(
-                dataset
+                minmax(0, 1fr)
             );
 
-        } else {
-
-            jcChart.data.datasets[0] =
-                dataset;
-
-        }
-
-
-        jcChart.update();
-
-
-        updateResultCards(
-            parameters
-        );
-
-
-        updateEquationDisplay(
-            parameters.model
-        );
-
-    }
-
-    catch (error) {
-
-        alert(error.message);
-
     }
 
 }
 
 
-/* =========================================================
-   ADD COMPARISON CURVE
-   ========================================================= */
+@media
+(max-width: 800px) {
 
-function addCurve() {
+    .header-inner {
 
-    try {
+        flex-direction:
+            column;
 
-        const parameters =
-            getCurrentParameters();
-
-
-        const curve =
-            generateCurve(parameters);
-
-
-        const selectedColor =
-
-            curveColors[
-                colorIndex %
-                curveColors.length
-            ];
-
-
-        colorIndex++;
-
-
-        jcChart.data.datasets.push({
-
-            label:
-                getCurveName(parameters),
-
-            data:
-                curve,
-
-            borderColor:
-                selectedColor,
-
-            backgroundColor:
-                selectedColor,
-
-            borderWidth:
-                2.5,
-
-            pointRadius:
-                0,
-
-            pointHoverRadius:
-                4,
-
-            tension:
-                0
-
-        });
-
-
-        jcChart.update();
-
-    }
-
-    catch (error) {
-
-        alert(error.message);
-
-    }
-
-}
-
-
-/* =========================================================
-   CLEAR COMPARISON CURVES
-   ========================================================= */
-
-function clearCurves() {
-
-    if (
-        jcChart.data.datasets.length > 0
-    ) {
-
-        jcChart.data.datasets = [
-
-            jcChart.data.datasets[0]
-
-        ];
+        align-items:
+            stretch;
 
     }
 
 
-    colorIndex = 1;
-
-
-    jcChart.update();
-
-}
-
-
-/* =========================================================
-   RESULT CARDS
-   ========================================================= */
-
-function updateResultCards(
-    parameters
-) {
-
-    const stressZero =
-
-        calculateFlowStress(
-            0,
-            parameters
-        );
-
-
-    const stress01 =
-
-        calculateFlowStress(
-            0.10,
-            parameters
-        );
-
-
-    const rateMultiplier =
-
-        calculateStrainRateMultiplier(
-            parameters
-        );
-
-
-    const thermalMultiplier =
-
-        calculateThermalMultiplier(
-            parameters
-        );
-
-
-    stressAtZero.textContent =
-
-        stressZero.toFixed(4) +
-        " GPa";
-
-
-    stressAt01.textContent =
-
-        stress01.toFixed(4) +
-        " GPa";
-
-
-    strainRateMultiplierDisplay.textContent =
-
-        rateMultiplier.toFixed(5);
-
-
-    thermalMultiplierDisplay.textContent =
-
-        thermalMultiplier.toFixed(5);
-
-}
-
-
-/* =========================================================
-   EQUATION DISPLAY
-   ========================================================= */
-
-function updateEquationDisplay(
-    model
-) {
-
-    if (
-        model === "modified"
-    ) {
-
-        equationBox.innerHTML =
-
-            "σ<sub>y</sub> = " +
-
-            "[A + B(ε<sub>p</sub>)<sup>n</sup>] " +
-
-            "[1 + C ln(ε̇ / ε̇<sub>0</sub>)] " +
-
-            "[1 − (T*)<sup>m</sup>]";
-
-
-    } else {
-
-        equationBox.innerHTML =
-
-            "σ<sub>y</sub> = " +
-
-            "[A + B(ε<sub>p</sub>)<sup>n</sup>] " +
-
-            "[1 + C ln(ε̇ / ε̇<sub>0</sub>)]";
-
-    }
-
-}
-
-
-/* =========================================================
-   MODEL INTERFACE
-   ========================================================= */
-
-function updateModelInterface() {
-
-    const modifiedElements =
-
-        document.querySelectorAll(
-            ".modified-only"
-        );
-
-
-    modifiedElements.forEach(
-        element => {
-
-            if (
-                modelType.value ===
-                "modified"
-            ) {
-
-                element.classList.remove(
-                    "hidden"
-                );
-
-            } else {
-
-                element.classList.add(
-                    "hidden"
-                );
-
-            }
-
-        }
-    );
-
-
-    updateEquationDisplay(
-        modelType.value
-    );
-
-}
-
-
-/* =========================================================
-   APPLY MATERIAL PRESET
-   ========================================================= */
-
-function applyPreset() {
-
-    const selectedPreset =
-        preset.value;
-
-
-    if (
-        selectedPreset ===
-        "custom"
-    ) {
-
-        return;
-
-    }
-
-
-    const material =
-        materialPresets[
-            selectedPreset
-        ];
-
-
-    modelType.value =
-        material.model;
-
-
-    inputA.value =
-        material.A;
-
-    inputB.value =
-        material.B;
-
-    inputN.value =
-        material.n;
-
-    inputC.value =
-        material.C;
-
-
-    referenceStrainRate.value =
-        material.referenceStrainRate;
-
-
-    strainRate.value =
-        material.strainRate;
-
-
-    maxPlasticStrain.value =
-        material.maxPlasticStrain;
-
-
-    if (
-        material.model ===
-        "modified"
-    ) {
-
-        inputM.value =
-            material.m;
-
-        referenceTemperature.value =
-            material.referenceTemperature;
-
-        meltingTemperature.value =
-            material.meltingTemperature;
-
-        temperature.value =
-            material.temperature;
-
-    }
-
-
-    updateModelInterface();
-
-
-    updateCurrentCurve();
-
-}
-
-
-/* =========================================================
-   CSV EXPORT
-   ========================================================= */
-
-function exportCsv() {
-
-    try {
-
-        const parameters =
-            getCurrentParameters();
-
-
-        const curve =
-            generateCurve(
-                parameters
+    .two-columns,
+    .three-columns,
+    .parameter-grid,
+    .result-grid {
+
+        grid-template-columns:
+            repeat(
+                2,
+                minmax(0, 1fr)
             );
 
-
-        let csv =
-
-            "Equivalent_Plastic_Strain," +
-
-            "Flow_Stress_GPa\n";
-
-
-        curve.forEach(
-            point => {
-
-                csv +=
-
-                    `${point.x.toFixed(8)},` +
-
-                    `${point.y.toFixed(8)}\n`;
-
-            }
-        );
-
-
-        const blob =
-
-            new Blob(
-
-                [csv],
-
-                {
-                    type:
-                        "text/csv;charset=utf-8;"
-                }
-
-            );
-
-
-        const url =
-
-            URL.createObjectURL(
-                blob
-            );
-
-
-        const link =
-
-            document.createElement(
-                "a"
-            );
-
-
-        link.href =
-            url;
-
-
-        link.download =
-
-            "johnson_cook_curve.csv";
-
-
-        document.body.appendChild(
-            link
-        );
-
-
-        link.click();
-
-
-        document.body.removeChild(
-            link
-        );
-
-
-        URL.revokeObjectURL(
-            url
-        );
-
     }
 
-    catch (error) {
 
-        alert(error.message);
+    .chart-container {
+
+        height:
+            420px;
 
     }
 
 }
 
 
-/* =========================================================
-   SCIENTIFIC NUMBER FORMAT
-   ========================================================= */
+@media
+(max-width: 520px) {
 
-function formatScientific(
-    value
-) {
+    .app-container,
+    .header-inner {
 
-    if (
-        Math.abs(value) >= 0.01 &&
-        Math.abs(value) < 10000
-    ) {
+        padding-left:
+            14px;
 
-        return value.toString();
+        padding-right:
+            14px;
 
     }
 
 
-    return value.toExponential(2);
+    .panel {
+
+        padding:
+            17px;
+
+    }
+
+
+    .two-columns,
+    .three-columns,
+    .parameter-grid,
+    .result-grid {
+
+        grid-template-columns:
+            1fr;
+
+    }
+
+
+    .button-row {
+
+        flex-direction:
+            column;
+
+    }
+
+
+    button {
+
+        width:
+            100%;
+
+    }
+
+
+    .chart-container {
+
+        height:
+            350px;
+
+    }
 
 }
-
-
-/* =========================================================
-   EVENT LISTENERS
-   ========================================================= */
-
-modelType.addEventListener(
-    "change",
-    () => {
-
-        preset.value =
-            "custom";
-
-        updateModelInterface();
-
-        updateCurrentCurve();
-
-    }
-);
-
-
-preset.addEventListener(
-    "change",
-    applyPreset
-);
-
-
-updateButton.addEventListener(
-    "click",
-    updateCurrentCurve
-);
-
-
-addCurveButton.addEventListener(
-    "click",
-    addCurve
-);
-
-
-clearCurvesButton.addEventListener(
-    "click",
-    clearCurves
-);
-
-
-exportCsvButton.addEventListener(
-    "click",
-    exportCsv
-);
-
-
-/*
-Live updates when a numerical parameter changes.
-*/
-
-const numericalInputs = [
-
-    inputA,
-    inputB,
-    inputN,
-    inputC,
-    inputM,
-
-    referenceStrainRate,
-    referenceTemperature,
-    meltingTemperature,
-
-    strainRate,
-    temperature,
-
-    maxPlasticStrain
-
-];
-
-
-numericalInputs.forEach(
-    input => {
-
-        input.addEventListener(
-            "input",
-            () => {
-
-                preset.value =
-                    "custom";
-
-
-                /*
-                Avoid alerting while the user
-                temporarily clears an input.
-                */
-
-                if (
-                    input.value.trim() === ""
-                ) {
-
-                    return;
-
-                }
-
-
-                try {
-
-                    updateCurrentCurve();
-
-                }
-
-                catch (_) {
-
-                    /*
-                    Input validation will be
-                    shown when Update Curve is
-                    explicitly pressed.
-                    */
-
-                }
-
-            }
-        );
-
-    }
-);
-
-
-/* =========================================================
-   INITIAL STATE
-   ========================================================= */
-
-updateModelInterface();
-
-applyPreset();
